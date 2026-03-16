@@ -1,0 +1,65 @@
+---
+title: "Statistical DUS Overexpression analysis"
+author: "Oliwia Hillestad Waz"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(Biostrings)
+library(readxl)
+library(tidyr)
+library(stringr)
+library(dplyr)
+library(ggplot2)
+library(forcats) # Useful for reordering the species axis
+library(scales) # Required for the rescale function
+
+```
+
+
+Based on manual overexpression calculation done in excel, a heat-map is constructed:
+
+```{r}
+# Load data from excel
+enrichment_df <- read_excel("C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Overexpression_calculation.xlsx")
+
+# Wide excel data into long format
+df_long <- enrichment_df %>%
+  pivot_longer(
+    cols = starts_with("DUS"), 
+    names_to = "Motif", 
+    values_to = "Enrichment_Ratio"
+  )
+
+# Order x-axis from 10 to 4 (left to right)
+df_long$Motif <- factor(df_long$Motif, 
+                        levels = c("DUS10 ratio", "DUS9 ratio", "DUS8 ratio", "DUS7 ratio", "DUS6 ratio", "DUS5 ratio", "DUS4 ratio"))
+
+# Construct Heat-map 
+ggplot(df_long, 
+       aes(x = Motif, 
+           y = fct_reorder(Species, Enrichment_Ratio, .fun = max), 
+           fill = Enrichment_Ratio)) +
+  geom_tile(color = "white") + 
+  geom_text(aes(label = round(Enrichment_Ratio, 1)), size = 3, color = "black") +
+  scale_fill_gradientn(
+    colors = c("#f7fcf5", "#f7fcf5", "#CC9933", "#CC9933", "#CC9900"), # Light to dark green
+    trans = "log10",
+    name = "Enrichment\nRatio (log10)",
+    breaks = c(1, 10, 100, 1000, 10000),
+    labels = scales::comma
+  ) +
+  theme_minimal() +
+  labs(
+    title = "ChromoDUS Enrichment Across Species",
+    subtitle = "Values represent Observed/Expected ratios based on GC-bias",
+    x = "Motif",
+    y = "Species") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+

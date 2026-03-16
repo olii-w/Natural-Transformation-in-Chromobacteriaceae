@@ -1,0 +1,282 @@
+---
+title: "DUS_heatmap"
+author: "Oliwia Hillestad Waz"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r Load packages, message=FALSE, warning=FALSE}
+library(Biostrings) 
+library(igraph) 
+library(stringr)
+library(rtracklayer)
+library(ggplot2) 
+library(tidyr) 
+library(dplyr)  
+library(gggenes)
+library(forcats) #to arrange in ascending order 
+library(patchwork)
+library(openxlsx) # to export heatmap as excel table 
+
+```
+
+
+## Chromo-DUS search ##
+
+Defining DUS-motifs:
+```{r message=FALSE, warning=FALSE}
+dus10 <- "GTTGGCCGMA" #M depicts an allowed variation between A and C 
+dus9 <- "GTTGGCCGM" 
+dus8 <- "GTTGGCCG" 
+dus7 <- "TTGGCCG"
+dus6 <- "TGGCCG"
+dus5 <- "GGCCG"
+dus4 <- "GCCG"
+
+
+```
+
+
+Loading data and k-mer search in Chromo:
+```{r Chunk 1, message=FALSE, warning=FALSE}
+#Load fasta file into R 
+dna_seqs <- readDNAStringSet("C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Data/ncbi_chromo/Chromo_36.fasta") 
+
+# Define the two genomes with contigs to target them for merging later on 
+merge_targets <- c("Vogesella indigofera", "Gulbenkiania indica") 
+
+# Create a grouping ID; this ID is ONLY used to decide which contigs belong togethe
+grouping_id <- sapply(names(dna_seqs), function(header) { 
+  is_merge_target <- any(sapply(merge_targets, function(x) grepl(x, header))) 
+  if (is_merge_target) { 
+    header %>% str_remove("^\\S+\\s+") %>%  # Remove Accession (NZ_...) 
+      str_remove(",.*$") %>%   # Remove everything after comma 
+      str_remove("_\\d+$") %>% # Remove contig suffix (e.g., _101) 
+      str_trim() } else {   
+        header } # For Chromobacterium and others, keep the WHOLE header as the ID.
+  }) 
+
+# Merge sequences 
+split_seqs <- split(dna_seqs, grouping_id) 
+seqs <- DNAStringSet( lapply(split_seqs, 
+                             function(x) do.call(
+                               xscat, as.list(x)))) 
+
+# Final Cleaning of the names - remove the keys (which still have the Genus)
+names(seqs) <- names(split_seqs) %>%
+  str_remove("^[A-Z]{1,3}_[A-Z0-9]+\\.\\d+\\s+") %>%  
+  str_remove("(?i)\\s+chromosome.*$") %>% 
+  str_remove("(?i)\\s+complete genome.*$") %>% 
+  str_remove("(?i)\\s+whole genome shotgun.*$") %>% 
+  str_remove(",.*$") %>%   
+  ifelse(grepl("^Vogesella", .), 
+         str_remove(., "\\s+Ga\\d+$"), .) %>%   # Remove Ga0215675 ONLY from Vogesella
+  ifelse(grepl("^Gulbenkiania", .), 
+         str_remove(., "\\s+DSM_\\d+$"), .) %>% # Remove DSM_17901 ONLY from Gulbenkiania
+  str_trim()
+
+# Verification 
+print(names(seqs))
+
+# Function that counts DUS for both forward and reverse. fixed = FALSE allows R to interpret IUPAC codes like 'M' which stand for ether bp A or C
+count_motif <- function(seqset, motif) {
+  forward <- vcountPattern(motif, seqset, fixed = FALSE)
+  rev_motif <- as.character(reverseComplement(DNAString(motif)))
+  reverse <- vcountPattern(rev_motif, seqset, fixed = FALSE)
+  return(forward + reverse)
+} 
+
+# counts per genome in a table split by name  
+counts_df <- data.frame(Genome = names(seqs),   
+  DUS10 = count_motif(seqs, dus10),
+  DUS9 = count_motif(seqs, dus9),   
+  DUS8 = count_motif(seqs, dus8),
+  DUS7 = count_motif(seqs, dus7),
+  DUS6 = count_motif(seqs, dus6),
+  DUS5 = count_motif(seqs, dus5),
+  DUS4 = count_motif(seqs, dus4)
+  )   
+
+counts_df <- counts_df %>% 
+  filter(!grepl("plasmid", Genome, ignore.case = TRUE)) #removing plasmids
+
+```
+
+
+Do the same for E. coli K12 and B. pseudomalei
+```{r Chunk 2}
+ecoli_seq <- readDNAStringSet("C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Data/ncbi_ecoli_K12/GCF_000005845.2_ASM584v2_genomic.fna")  
+
+names(ecoli_seq) <- names(ecoli_seq) %>%
+  str_remove("^[^ ]+\\s+") %>%                     # Remove accession number
+  str_remove(",.*$") %>%                           # Remove after comma
+  str_remove("\\s+chromosome.*$") %>%               # Remove "chromosome..."
+  str_remove("\\s+complete genome.*$") %>%          # Remove "complete genome..."
+  str_trim()
+
+ecoli_counts <- data.frame(Genome = names(ecoli_seq),
+  DUS4 = count_motif(ecoli_seq, dus4),
+  DUS5 = count_motif(ecoli_seq, dus5),
+  DUS6 = count_motif(ecoli_seq, dus6),
+  DUS7 = count_motif(ecoli_seq, dus7),
+  DUS8  = count_motif(ecoli_seq, dus8),
+  DUS9  = count_motif(ecoli_seq, dus9),
+  DUS10 = count_motif(ecoli_seq, dus10)
+)
+
+burk_seq <- readDNAStringSet("C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Data/ncbi_burkholderia/GCF_030297255.1_ASM3029725v1_genomic.fna")
+
+names(burk_seq) <- names(burk_seq) %>%
+  str_remove("^[^ ]+\\s+") %>%
+  str_remove(",.*$") %>%   
+  str_remove("\\s+chromosome.*$") %>%       
+  str_remove("\\s+complete genome.*$") %>%      
+  str_trim()
+
+burk_counts <- data.frame(Genome = names(burk_seq),
+  DUS4 = count_motif(burk_seq, dus4),
+  DUS5 = count_motif(burk_seq, dus5),
+  DUS6 = count_motif(burk_seq, dus6),
+  DUS7 = count_motif(burk_seq, dus7),
+  DUS8  = count_motif(burk_seq, dus8),
+  DUS9  = count_motif(burk_seq, dus9),
+  DUS10 = count_motif(burk_seq, dus10)
+)
+
+```
+
+
+Progressing from DUS count in genome to DUS/Mb to have data that can be compared across species and memebers. 
+```{r Chunk 3, message=FALSE, warning=FALSE}
+genome_lengths <- data.frame(
+  Genome = names(seqs),
+  Length_Mb = width(seqs) / 1e6
+)
+
+# Add genome lengths
+counts_df <- merge(counts_df, genome_lengths, by = "Genome")
+
+# Calculate normalised counts (DUS per Mb)
+counts_df$DUS10_perMb <- counts_df$DUS10 / counts_df$Length_Mb
+counts_df$DUS9_perMb <- counts_df$DUS9 / counts_df$Length_Mb
+counts_df$DUS8_perMb <- counts_df$DUS8 / counts_df$Length_Mb
+counts_df$DUS7_perMb <- counts_df$DUS7 / counts_df$Length_Mb
+counts_df$DUS6_perMb <- counts_df$DUS6 / counts_df$Length_Mb
+counts_df$DUS5_perMb <- counts_df$DUS5 / counts_df$Length_Mb
+counts_df$DUS4_perMb <- counts_df$DUS4 / counts_df$Length_Mb
+
+#export to excel because I need a list of all the strains
+#write.xlsx(counts_df, file = "Strain_list.xlsx", row.names = FALSE)
+
+# reshape normalised data
+chromo_long <- counts_df %>%
+  pivot_longer(
+    cols = ends_with("_perMb"),
+    names_to = "Motif",
+    values_to = "Count_perMb"
+  ) %>%
+  mutate(Motif = gsub("_perMb", "", Motif)) %>%
+  distinct(Genome, Motif, .keep_all = TRUE)
+
+
+#E. coli K 12 and Burk - code is different because just one genome is analysed, and not multiple
+ecoli_genome_length <- sum(width(ecoli_seq)) / 1e6
+
+ecoli_counts <- ecoli_counts %>%
+  mutate(
+    Length_Mb = ecoli_genome_length,
+    DUS4_perMb  = DUS4  / ecoli_genome_length,
+    DUS5_perMb  = DUS5  / ecoli_genome_length,
+    DUS6_perMb  = DUS6  / ecoli_genome_length,
+    DUS7_perMb  = DUS7  / ecoli_genome_length,
+    DUS8_perMb  = DUS8  / ecoli_genome_length,
+    DUS9_perMb  = DUS9  / ecoli_genome_length,
+    DUS10_perMb = DUS10 / ecoli_genome_length
+  )
+
+ecoli_long <- ecoli_counts %>%
+  pivot_longer(
+    cols = ends_with("_perMb"),
+    names_to = "Motif",
+    values_to = "Count_perMb"
+  ) %>%
+  mutate(Motif = gsub("_perMb", "", Motif)) %>%
+  distinct(Genome, Motif, .keep_all = TRUE)
+
+burk_genome_length <- sum(width(burk_seq)) / 1e6
+
+burk_counts <- burk_counts %>%
+  mutate(
+    Length_Mb = burk_genome_length,
+    DUS4_perMb  = DUS4  / burk_genome_length,
+    DUS5_perMb  = DUS5  / burk_genome_length,
+    DUS6_perMb  = DUS6  / burk_genome_length,
+    DUS7_perMb  = DUS7  / burk_genome_length,
+    DUS8_perMb  = DUS8  / burk_genome_length,
+    DUS9_perMb  = DUS9  / burk_genome_length,
+    DUS10_perMb = DUS10 / burk_genome_length
+  )
+
+burk_long <- burk_counts %>%
+  pivot_longer(
+    cols = ends_with("_perMb"),
+    names_to = "Motif",
+    values_to = "Count_perMb"
+  ) %>%
+  mutate(Motif = gsub("_perMb", "", Motif)) %>%
+  distinct(Genome, Motif, .keep_all = TRUE)
+
+```
+
+
+Heat map of DUS/Mb with logarithmic scaling to normalise the values and accurately represent distribution. 
+```{r Chunk 4, message=FALSE, warning=FALSE}
+# Combine  data
+chromo_long$Group <- "Chromobacteriaceae"
+ecoli_long$Group <- "Escherichia coli K12"
+burk_long$Group <- "Burkholderia pseudomallei"
+
+combined_long <- bind_rows(chromo_long, ecoli_long, burk_long)
+
+combined_long <- combined_long %>%
+  mutate(Genome = fct_reorder(Genome, Count_perMb, .desc = FALSE),
+         Group  = factor(Group, levels =c(
+           "Chromobacteriaceae",
+           "Escherichia coli K12",
+           "Burkholderia pseudomallei")))
+
+# Set order of x-axis
+combined_long$Motif <- factor(
+  combined_long$Motif,
+  levels = c("DUS10", "DUS9", "DUS8", "DUS7", "DUS6", "DUS5", "DUS4")
+)
+
+
+# Heat-map visualising DUS/Mb for merged dataset  
+ggplot(combined_long,
+       aes(x = Motif, y = Genome, fill = Count_perMb)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = round(Count_perMb, 1)), color = "black", size = 3) +
+  scale_fill_gradientn(
+    colours = c("ghostwhite","ghostwhite","lightsteelblue", "lightsteelblue3", "lightsteelblue4"),
+    trans = "log10",
+    breaks = c(1, 10, 100, 1000, 10000),
+    labels = scales::comma
+  ) +
+  labs(
+    title = "DUS/Mb in Chromobacteriaceae",
+    subtitle = "Values include E. coli K-12 and B. pseudomallei as controlls",
+    x = "Motif",
+    y = "Strain",
+    fill = "DUS/Mb (log10)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+```
+

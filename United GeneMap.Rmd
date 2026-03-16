@@ -1,0 +1,106 @@
+---
+title: "United GeneMap"
+author: "Oliwia Hillestad Waz"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r message=FALSE, warning=FALSE}
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(gggenes)
+library(tidyverse)
+
+```
+
+
+Prepare data: 
+```{r message=FALSE, warning=FALSE}
+# Import Excel file with operon-mapper results 
+genes <- read_excel("C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Data/OperonMapper/OperonMapper_results.xlsx")
+
+genes <- genes %>% # Tidy up dataset 
+  rename(
+    organism = Organism,
+    idgene = IdGene,
+    cog = COGgene,
+    start = PosLeft,
+    end = PostRight,
+    strand = Strand,
+    name = Name,
+    Function = Function
+  ) %>%
+  fill(organism, .direction = "down") %>%
+  mutate(
+    start = as.numeric(start),
+    end = as.numeric(end),
+    strand = ifelse(strand == "+", TRUE, FALSE)
+  )
+
+# Identify ComP genes
+comp_genes <- genes %>%
+  filter(tolower(Function) == "comp") %>%
+  group_by(organism) %>%
+  slice(1) %>%
+  ungroup()
+
+if (nrow(comp_genes) == 0) {
+  stop("No genes with Function = 'ComP' found. Check spelling/case.")
+}
+
+print(comp_genes[, c("organism", "idgene", "name", "strand")])
+
+# Align and orient all genomes around ComP
+genes_centered <- genes %>%
+  group_by(organism) %>%
+  mutate( # Get ComP start coordinate and strand for this organism
+    comp_start = comp_genes$start[match(organism, comp_genes$organism)],
+    comp_strand = comp_genes$strand[match(organism, comp_genes$organism)],
+    # Relative coordinates
+    start_rel = start - comp_start,
+    end_rel = end - comp_start,
+    # Flip if ComP is reverse
+    start_plot = ifelse(comp_strand, start_rel, -end_rel),
+    end_plot = ifelse(comp_strand, end_rel, -start_rel),
+    plot_strand = ifelse(comp_strand, strand, !strand)
+  ) %>%
+  ungroup()
+
+# Limit region around ComP (±10 kb)
+genes_centered <- genes_centered %>%
+  filter(start_plot > -10000 & end_plot < 10000)
+
+# Plot all organisms aligned on ComP
+p <- ggplot(
+  genes_centered,
+  aes(
+    xmin = start_plot, xmax = end_plot,
+    y = fct_rev(factor(organism)),
+    fill = Function,
+    forward = plot_strand)) +
+  geom_gene_arrow(arrowhead_height = unit(3, "mm"), 
+                  arrowhead_width = unit(1, "mm")) +
+  geom_gene_label(aes(label = cog), size = 2.5, fontface = "italic") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+  theme_genes() +
+  labs(
+    title = "Gene neighborhoods of ComP",
+    x = "Position relative to ComP (bp)",
+    y = "Organism"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
+    axis.text.y = element_text(size = 8),
+    legend.position = "bottom"
+  ) +
+  scale_fill_brewer(palette = "Set3") 
+
+p
+  
+```
+
+
+

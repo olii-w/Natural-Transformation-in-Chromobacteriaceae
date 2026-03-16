@@ -1,0 +1,283 @@
+---
+title: "Sequence Logos"
+author: "Oliwia Hillestad Waz"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+```{r}
+#load packages 
+library(Biostrings)
+library(ggplot2)
+library(ggseqlogo)
+library(gridExtra)
+library(patchwork)
+library(IRanges)
+library(grateful)
+
+```
+
+
+```{r}
+# Motif spefification and up/down region extraction 
+motif_vog <- "GTTGGCCGCA"
+motif_pg <- "GTTGGCCGAA"
+up <- 4
+down <- 4
+
+```
+
+
+
+Vogesella indigofera
+```{r}
+vog <- readDNAStringSet("C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Data/ncbi_Vogesella/1 GCF_003633895.1_ASM363389v1_genomic.fna")
+
+# Find matches on both forward and reverse strands. search for the motif itself is perfomred to find the 'anchor'
+matches_fwd <- vmatchPattern(motif_vog, vog, max.mismatch = 1)
+matches_rev <- vmatchPattern(reverseComplement(DNAString(motif_vog)), vog, max.mismatch = 1)
+
+# Create a function to expand and extract to account for the +/-4bp regions 
+extract_with_context <- function(matches, vog, up, down, is_rev = FALSE) {
+  ranges <- as(matches, "IRangesList")[[1]] # Convert matches to coordinates
+  starts <- start(ranges) - up # Expand coordinates
+  ends <- end(ranges) + down
+  valid <- starts > 0 & ends <= length(vog[[1]]) # Filter out-of-bounds (near chromosome edges)
+  final_ranges <- IRanges(start = starts[valid], end = ends[valid])
+  seqs <- extractAt(vog[[1]], final_ranges) # Extract
+  if(is_rev) {
+    seqs <- reverseComplement(seqs)
+  } # If we found these on the reverse strand, we must reverse complement them back so the logo alignment is consistent
+  return(as.character(seqs))
+}
+
+# 4. Combine results from forward and reverse strand 
+all_vog <- c(
+  extract_with_context(matches_fwd, vog, up, down, is_rev = FALSE),
+  extract_with_context(matches_rev, vog, up, down, is_rev = TRUE)
+)
+
+```
+
+
+Pseudogulberkiania sp. NH8B
+```{r}
+pseudo <- readDNAStringSet("C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Data/ncbi_Chromo/Chromo_FASTA/GCF_000283535.1_ASM28353v1_genomic.fna")
+
+matches_fwd <- vmatchPattern(motif_pg, pseudo, max.mismatch = 1)
+matches_rev <- vmatchPattern(reverseComplement(DNAString(motif_pg)), pseudo, max.mismatch = 1)
+
+extract_with_context <- function(matches, pseudo, up, down, is_rev = FALSE) {
+  ranges <- as(matches, "IRangesList")[[1]] 
+  starts <- start(ranges) - up 
+  ends <- end(ranges) + down
+  valid <- starts > 0 & ends <= length(pseudo[[1]]) 
+  final_ranges <- IRanges(start = starts[valid], end = ends[valid])
+  seqs <- extractAt(pseudo[[1]], final_ranges) 
+  if(is_rev) {
+    seqs <- reverseComplement(seqs)
+  } 
+  return(as.character(seqs))
+} 
+
+all_pseudo <- c(
+  extract_with_context(matches_fwd, pseudo, up, down, is_rev = FALSE),
+  extract_with_context(matches_rev, pseudo, up, down, is_rev = TRUE)
+)
+
+```
+
+
+Gulberkiania indica strain DSM 17901
+```{r}
+gulb <- readDNAStringSet("C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Data/ncbi_Chromo/Chromo_FASTA/GCF_001418035.1_ASM141803v1_genomic.fna")
+
+matches_fwd <- vmatchPattern(motif_pg, gulb, max.mismatch = 1)
+matches_rev <- vmatchPattern(reverseComplement(DNAString(motif_pg)), gulb, max.mismatch = 1)
+
+extract_with_context <- function(matches, gulb, up, down, is_rev = FALSE) {
+  ranges <- as(matches, "IRangesList")[[1]] 
+  starts <- start(ranges) - up 
+  ends <- end(ranges) + down
+  valid <- starts > 0 & ends <= length(gulb[[1]]) 
+  final_ranges <- IRanges(start = starts[valid], end = ends[valid])
+  seqs <- extractAt(gulb[[1]], final_ranges) 
+  if(is_rev) {
+    seqs <- reverseComplement(seqs)
+  } 
+  return(as.character(seqs))
+} 
+
+all_gulb <- c(
+  extract_with_context(matches_fwd, gulb, up, down, is_rev = FALSE),
+  extract_with_context(matches_rev, gulb, up, down, is_rev = TRUE)
+)
+
+```
+
+
+```{r}
+XCS3 <- readDNAStringSet("C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Data/ncbi_Chromo/Chromo_FASTA/GCF_020616155.1_ASM2061615v1_genomic.fna")
+
+matches_fwd <- vmatchPattern(motif_vog, XCS3, max.mismatch = 1)
+matches_rev <- vmatchPattern(reverseComplement(DNAString(motif_vog)), XCS3, max.mismatch = 1)
+
+extract_with_context <- function(matches, XCS3, up, down, is_rev = FALSE) {
+  ranges <- as(matches, "IRangesList")[[1]] 
+  starts <- start(ranges) - up 
+  ends <- end(ranges) + down
+  valid <- starts > 0 & ends <= length(XCS3[[1]]) 
+  final_ranges <- IRanges(start = starts[valid], end = ends[valid])
+  seqs <- extractAt(XCS3[[1]], final_ranges) 
+  if(is_rev) {
+    seqs <- reverseComplement(seqs)
+  } 
+  return(as.character(seqs))
+} 
+
+all_XCS3 <- c(
+  extract_with_context(matches_fwd, XCS3, up, down, is_rev = FALSE),
+  extract_with_context(matches_rev, XCS3, up, down, is_rev = TRUE)
+)
+
+```
+
+
+Plot for species that posess DUS based on R-finder results
+```{r}
+plot_pseudo <- ggplot() + 
+  geom_logo(all_pseudo, stack_width = 0.90) +
+  labs(
+    title = "Pseudogulberkiania sp. NH8B") +
+  theme_logo()
+
+plot_vog <- ggplot() + 
+  geom_logo(all_vog, stack_width = 0.90) +
+  labs(
+    title = "Vogesella indigofera DSM 3033") +
+  theme_logo()
+
+plot_gulb <- ggplot() + 
+  geom_logo(all_gulb, stack_width = 0.90) +
+  labs(
+    title = "Gulberkiania indica DSM 17901") +
+  theme_logo()
+
+plot_XCS3 <- ggplot() + 
+  geom_logo(all_XCS3, stack_width = 0.90) +
+  labs(
+    title = "Vogesealla sp. XCS3") +
+  theme_logo()
+
+plot_vog / plot_XCS3 / plot_gulb / plot_pseudo
+
+
+```
+
+
+Pipeline for the genus representing species that did not have DUS-like sequences idendified by R-finder 
+```{r}
+motifs <- c(
+  motif1 = "GTTGGCCGCA",
+  motif2 = "GTTGGCCGAA"
+)
+
+up <- 4
+down <- 4
+max_mismatch <- 1
+
+#load genomes 
+genomes <- list(
+  "Chromobacterium sp. IBBL 290-4" = "C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Data/ncbi_Chromo/Chromo_FASTA/GCF_024207115.1_ASM2420711v1_genomic.fna", 
+  "Aquitalea sp. USM5" = "C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Data/ncbi_Chromo/Chromo_FASTA/GCF_004328945.1_ASM432894v1_genomic.fna",
+  "Paludibacterium paludis strain BCRC 80514" = "C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Data/ncbi_Chromo/Chromo_FASTA/GCF_018802605.1_ASM1880260v1_genomic.fna",
+  "Escherichia coli str. K-12" = "C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Data/ncbi_ecoli_K12/GCF_000005845.2_ASM584v2_genomic.fna",
+  "Burkholderia pseudomallei" = "C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Data/ncbi_burkholderia/GCF_030297255.1_ASM3029725v1_genomic.fna"
+)
+
+#universal extraction function
+extract_with_context <- function(matches, genome, up, down, is_rev = FALSE) {
+  if (length(matches) == 0) return(character(0))
+  ranges <- as(matches, "IRangesList")[[1]]
+  starts <- start(ranges) - up
+  ends   <- end(ranges) + down
+  valid <- starts > 0 & ends <= length(genome[[1]])
+  final_ranges <- IRanges(start = starts[valid], end = ends[valid])
+  seqs <- extractAt(genome[[1]], final_ranges)
+  if (is_rev) {
+    seqs <- reverseComplement(seqs)
+  }
+  return(as.character(seqs))
+}
+
+#genome processing function
+process_genome <- function(fasta_path, motifs, up, down, max_mismatch) {
+  genome <- readDNAStringSet(fasta_path)
+  results <- list()
+  for (motif_name in names(motifs)) {
+    motif_seq <- motifs[[motif_name]]
+    motif_rc  <- reverseComplement(DNAString(motif_seq))
+    matches_fwd <- vmatchPattern(motif_seq, genome, max.mismatch = max_mismatch)
+    matches_rev <- vmatchPattern(motif_rc, genome, max.mismatch = max_mismatch)
+    sequences <- c(
+      extract_with_context(matches_fwd, genome, up, down, FALSE),
+      extract_with_context(matches_rev, genome, up, down, TRUE)
+    )
+    results[[motif_name]] <- sequences
+  }
+  return(results)
+}
+
+#plot function
+plot_logo_clean <- function(seqs) {
+  ggplot() + 
+    geom_logo(seqs, method = "bits", stack_width = 0.90) +
+    theme_logo() +
+    theme(
+      plot.title = element_blank()
+    )
+}
+
+
+#runs the functions together on the genomes 
+all_plots <- list()
+
+for (genome_name in names(genomes)) {
+  results <- process_genome(
+    fasta_path   = genomes[[genome_name]],
+    motifs       = motifs,
+    up           = up,
+    down         = down,
+    max_mismatch = max_mismatch
+  )
+  combined_seqs <- c(results[[1]], results[[2]]) #to have one plot for both motifs, since they only vary in 1bp 
+  all_plots[[genome_name]] <- plot_logo_clean(combined_seqs)
+}
+
+motif_title <- 
+  ggplot() + 
+  annotate( "text", x = 0.5, y = 0.5, label = "Motif: GTTGGCCG(A/C)A", size = 4, fontface = "bold") +
+  theme_void()
+
+label_species <- function(name) {
+  ggplot() +
+    annotate(
+      "text", x = 2, y = 1, label = name, angle = 0, hjust = 1, size = 3, fontface = "italic") +
+    xlim(0, 2) +
+    theme_void()
+}
+
+final_plot <-
+  (plot_spacer() | motif_title) /
+  (label_species("Chromobacterium \nsp. IBBL 290-4") | all_plots$Chromo) /
+  (label_species("Aquitalea sp. USM5") | all_plots$Aquitalea) /
+  (label_species("Paludibacterium paludis \nBCRC 80514") | all_plots$Paludibacterium) /
+  (label_species("Escherichia coli str. K-12") | all_plots$Escherichia) /
+  (label_species("Burkholderia pseudomallei") | all_plots$Burkholderia)
+
+final_plot
+
+```
+
+
