@@ -26,8 +26,8 @@ This repository contains the bioinformatic data and laboratory results for my Ma
 Investigating sequence-specific DNA uptake in Chromobacteriacea through k-mer enrichment analysis of DNA uptake sequences, identification of genes partaking in transformation, and AlphaFold predictions of ComP structure 
 
 ## Directory Structure
-- `/data`: Raw CSVs of genomic counts and protein accessions.
-- `/scripts`: (Optional) Any R or Python code used for analysis.
+- `/data`: Raw and processed CSVs of genomic analysis
+- `/scripts`: Mosly R code used for analysis, one file is from GitBash for r_finder analysis
 - `/results`: Operon maps, alignment files, and AlphaFold 3 models.
 
 
