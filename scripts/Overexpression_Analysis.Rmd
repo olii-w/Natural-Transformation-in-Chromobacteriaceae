@@ -24,7 +24,7 @@ Based on manual overexpression calculation done in excel, a heat-map is construc
 
 ```{r}
 # Load data from excel
-enrichment_df <- read_excel("C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Overexpression_calculation.xlsx")
+enrichment_df <- read_excel("C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Enrichment_calculation.xlsx")
 
 # Wide excel data into long format
 df_long <- enrichment_df %>%
