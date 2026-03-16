@@ -1,0 +1,8 @@
+#this code was used in GitBash to run the perl r_finder script on all genomes downloaded 
+
+
+#creates individual output files with top 20 overrrepresented 10-mer's for all FASTA files in the "Genomes" folder.
+for f in Genomes/*.fna; do out=$(basename "$f".fasta) 10mer_results.txt; echo "Analyzing $f..."; perl repeat_finder.pl -n10 "$f" > "$out"; done 
+
+#unites output files into one CSV file readable by Excel, includes the variables: Genome name, Rank of 10-mer, how many hits the 10-mer got, expected K-mer count, enrichment ratio and the 10-mer sequence.
+echo "Genome, Rank, Hits, Exp, X, Sequence" > 10mer_results.csv 
