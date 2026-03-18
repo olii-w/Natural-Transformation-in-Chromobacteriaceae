@@ -19,26 +19,141 @@ library(scales) # Required for the rescale function
 
 ```
 
-
-Based on manual overexpression calculation done in excel, a heat-map is constructed:
-
+enrichment analysis performed based on DUS counts in each genome 
 ```{r}
-# Load data from excel
-enrichment_df <- read_excel("C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Enrichment_calculation.xlsx")
+#load genome sequences and clean them up 
+seqs <- readDNAStringSet("C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Data/Chromo36_ecoli_pseudomallei.fasta") 
 
-# Wide excel data into long format
-df_long <- enrichment_df %>%
+# Define the two genomes with contigs to target them for merging later on 
+merge_targets <- c("Vogesella indigofera", "Gulbenkiania indica", "Burkholderia pseudomallei") 
+
+# Create a grouping ID; this ID is ONLY used to decide which contigs belong togethe
+grouping_id <- sapply(names(seqs), function(header) { 
+  is_merge_target <- any(sapply(merge_targets, function(x) grepl(x, header))) 
+  if (is_merge_target) { 
+    header %>% str_remove("^\\S+\\s+") %>%  # Remove Accession (NZ_...) 
+      str_remove(",.*$") %>%   # Remove everything after comma 
+      str_remove("_\\d+$") %>% # Remove contig suffix (e.g., _101)
+      str_remove("(?i)chromosome\\s*\\d+") %>% # Remove "chromosome 1" or "chromosome 2"
+      str_trim() } else {   
+        header } # keep other genomes as is 
+  }) 
+
+# Merge sequences 
+split_seqs <- split(seqs, grouping_id) 
+seqs <- DNAStringSet( lapply(split_seqs, 
+                             function(x) do.call(
+                               xscat, as.list(x)))) 
+
+# Final Cleaning of the names - remove the keys (which still have the Genus)
+names(seqs) <- names(split_seqs) %>%
+  str_remove("^[A-Z]{1,3}_[A-Z0-9]+\\.\\d+\\s+") %>%  
+  str_remove("(?i)\\s+chromosome.*$") %>% 
+  str_remove("(?i)\\s+complete genome.*$") %>% 
+  str_remove("(?i)\\s+whole genome shotgun.*$") %>% 
+  str_remove(",.*$") %>%   
+  ifelse(grepl("^Vogesella", .), 
+         str_remove(., "\\s+Ga\\d+$"), .) %>%   # Remove Ga0215675 ONLY from Vogesella
+  ifelse(grepl("^Gulbenkiania", .), 
+         str_remove(., "\\s+DSM_\\d+$"), .) %>% # Remove DSM_17901 ONLY from Gulbenkiania
+  str_trim()
+
+# Verification 
+print(names(seqs))
+
+
+```
+
+obs and genome properties 
+```{r}
+# load DUS counts 
+obs_df <- read_excel("C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Strain_list.xlsx")
+
+head(obs_df)
+
+# Compute genome properties
+genome_props <- data.frame(
+  Genome = names(seqs),
+  Length = width(seqs),
+  GC = letterFrequency(seqs, c("G","C"), as.prob = TRUE) %>% rowSums()
+)
+
+# Merge observed counts with genome properties
+df <- obs_df %>%
+  inner_join(genome_props, by = "Genome")
+
+
+```
+
+compute expected counts (GC-based)
+```{r}
+DUS_list <- list(
+  DUS10 = c("GTTGGCCGMA"),
+  DUS9  = c("GTTGGCCGM"),
+  DUS8  = c("GTTGGCCG"),
+  DUS7  = c("TTGGCCG"),
+  DUS6  = c("TGGCCG"),
+  DUS5  = c("GGCCG"),
+  DUS4  = c("GCCG")
+)
+
+# 1. Function to calculate probability of a motif given GC content
+calc_motif_prob <- function(motif, gc) {
+  n_gc <- str_count(motif, "[GC]")
+  n_at <- str_count(motif, "[AT]")
+  n_m  <- str_count(motif, "M")
+  # Probabilities
+  p_gc <- gc / 2
+  p_at <- (1 - gc) / 2
+  p_m  <- 0.5  # Because (gc/2) + ((1-gc)/2) = 0.5
+  # Total probability
+  return((p_gc^n_gc) * (p_at^n_at) * (p_m^n_m))
+}
+
+# 2. Loop through the DUS_list to create Expected and Enrichment columns
+for (dus_name in names(DUS_list)) {
+  motif <- DUS_list[[dus_name]]
+  k <- nchar(motif)
+  # Calculate Expected
+  exp_col_name <- paste0(dus_name, "_exp")
+  df <- df %>%
+    mutate(!!exp_col_name := 2 * Length * calc_motif_prob(motif, GC))
+  # Calculate Enrichment Ratio (Observed / Expected)
+  # Assumes your obs_df has columns named exactly "DUS10", "DUS9", etc.
+  enrich_col_name <- paste0(dus_name, "_enrichment")
+  df <- df %>%
+    mutate(!!enrich_col_name := .data[[dus_name]] / .data[[exp_col_name]])
+}
+
+# Check the results
+head(df %>% select(Genome, ends_with("enrichment")))
+
+```
+
+
+heatmap 
+```{r}
+
+# 1. Reshape the data for plotting
+# This takes the enrichment columns and stacks them
+df_long <- df %>%
+  select(Genome, ends_with("_enrichment")) %>%
   pivot_longer(
-    cols = starts_with("DUS"), 
-    names_to = "Motif", 
+    cols = ends_with("_enrichment"),
+    names_to = "Motif",
     values_to = "Enrichment_Ratio"
-  )
+  ) %>%
+  mutate(Motif = str_replace(Motif, "_enrichment", " ratio")) %>%
+  # Use the double colon to force dplyr
+  dplyr::rename(Species = Genome)
 
-# Order x-axis from 10 to 4 (left to right)
+
+# 2. Order the Motifs from 10 to 4
 df_long$Motif <- factor(df_long$Motif, 
-                        levels = c("DUS10 ratio", "DUS9 ratio", "DUS8 ratio", "DUS7 ratio", "DUS6 ratio", "DUS5 ratio", "DUS4 ratio"))
+                        levels = c("DUS10 ratio", "DUS9 ratio", "DUS8 ratio", 
+                                   "DUS7 ratio", "DUS6 ratio", "DUS5 ratio", "DUS4 ratio"))
 
-# Construct Heat-map 
+# 3. Construct the Heatmap
 ggplot(df_long, 
        aes(x = Motif, 
            y = fct_reorder(Species, Enrichment_Ratio, .fun = max), 
@@ -46,7 +161,7 @@ ggplot(df_long,
   geom_tile(color = "white") + 
   geom_text(aes(label = round(Enrichment_Ratio, 1)), size = 3, color = "black") +
   scale_fill_gradientn(
-    colors = c("#f7fcf5", "#f7fcf5", "#CC9933", "#CC9933", "#CC9900"), # Light to dark green
+    colors = c("#f7fcf5", "#f7fcf5", "#FFCC66", "#CC9933", "#CC9900"), # Adjusted for better contrast
     trans = "log10",
     name = "Enrichment\nRatio (log10)",
     breaks = c(1, 10, 100, 1000, 10000),
@@ -56,10 +171,76 @@ ggplot(df_long,
   labs(
     title = "ChromoDUS Enrichment Across Species",
     subtitle = "Values represent Observed/Expected ratios based on GC-bias",
-    x = "Motif",
-    y = "Species") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    x = "Motif Length",
+    y = "Bacterial Species"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid = element_blank()
+  )
 
 ```
 
+
+Calculate P-values and Significance
+```{r}
+df_long <- df %>%
+  select(Genome, ends_with("_enrichment"), ends_with("_exp"), 
+         DUS10, DUS9, DUS8, DUS7, DUS6, DUS5, DUS4) %>%
+  pivot_longer(
+    cols = c(DUS10, DUS9, DUS8, DUS7, DUS6, DUS5, DUS4),
+    names_to = "Motif_Name",
+    values_to = "Observed"
+  ) %>%
+  # Match the expected values to the observed counts
+  mutate(
+    Expected = case_when(
+      Motif_Name == "DUS10" ~ DUS10_exp,
+      Motif_Name == "DUS9"  ~ DUS9_exp,
+      Motif_Name == "DUS8"  ~ DUS8_exp,
+      Motif_Name == "DUS7"  ~ DUS7_exp,
+      Motif_Name == "DUS6"  ~ DUS6_exp,
+      Motif_Name == "DUS5"  ~ DUS5_exp,
+      Motif_Name == "DUS4"  ~ DUS4_exp
+    ),
+    Enrichment_Ratio = Observed / Expected,
+    # Calculate Poisson P-value (lower.tail = FALSE gives P(X > x))
+    P_val = ppois(Observed - 1, lambda = Expected, lower.tail = FALSE)
+  ) %>%
+  group_by(Motif_Name) %>%
+  mutate(P_adj = p.adjust(P_val, method = "BH")) %>% # FDR correction
+  ungroup() %>%
+  mutate(Signif_Label = case_when(
+    P_adj > 0.05  ~ "*",
+    TRUE ~ ""
+  )) %>%
+  mutate(Motif = paste0(Motif_Name, " ratio")) %>%
+  dplyr::rename(Species = Genome)
+
+#to check which have insignificant p-values 
+ggplot(df_long, 
+       aes(x = factor(Motif, levels = c("DUS10 ratio", "DUS9 ratio", "DUS8 ratio", 
+                                       "DUS7 ratio", "DUS6 ratio", "DUS5 ratio", "DUS4 ratio")), 
+           y = fct_reorder(Species, Enrichment_Ratio, .fun = max), 
+           fill = Enrichment_Ratio)) +
+  geom_tile(color = "white") + 
+  # Add the Significance stars
+  geom_text(aes(label = Signif_Label), color = "black", vjust = 0.8, size = 5) +
+  scale_fill_gradientn(
+    colors = c("#f7fcf5", "#e5f5e0", "#CC9933", "#CC9900", "#663300"),
+    trans = "log10",
+    name = "Enrichment\nRatio (log10)"
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Significant DUS Enrichment Across Species",
+    subtitle = "Asterisks indicate insignificant FDR-adjusted P-values (* > 0.05)",
+    x = "Motif",
+    y = "Species"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+```
 
