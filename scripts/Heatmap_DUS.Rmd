@@ -10,16 +10,12 @@ editor_options:
 
 ```{r Load packages, message=FALSE, warning=FALSE}
 library(Biostrings) 
-library(igraph) 
 library(stringr)
-library(rtracklayer)
 library(ggplot2) 
 library(tidyr) 
 library(dplyr)  
-library(gggenes)
-library(forcats) #to arrange in ascending order 
-library(patchwork)
-library(openxlsx) # to export heatmap as excel table 
+library(forcats) # to arrange order 
+library(openxlsx) # to export as excel table 
 
 ```
 
@@ -40,13 +36,13 @@ dus4 <- "GCCG"
 ```
 
 
-Loading data and k-mer search in Chromo:
-```{r Chunk 1, message=FALSE, warning=FALSE}
+
+```{r}
 #Load fasta file into R 
-dna_seqs <- readDNAStringSet("C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Data/ncbi_chromo/Chromo_36.fasta") 
+dna_seqs <- readDNAStringSet("C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Data/Chromo36_ecoli_pseudomallei.fasta") 
 
 # Define the two genomes with contigs to target them for merging later on 
-merge_targets <- c("Vogesella indigofera", "Gulbenkiania indica") 
+merge_targets <- c("Vogesella indigofera", "Gulbenkiania indica", "Burkholderia pseudomallei") 
 
 # Create a grouping ID; this ID is ONLY used to decide which contigs belong togethe
 grouping_id <- sapply(names(dna_seqs), function(header) { 
@@ -54,9 +50,10 @@ grouping_id <- sapply(names(dna_seqs), function(header) {
   if (is_merge_target) { 
     header %>% str_remove("^\\S+\\s+") %>%  # Remove Accession (NZ_...) 
       str_remove(",.*$") %>%   # Remove everything after comma 
-      str_remove("_\\d+$") %>% # Remove contig suffix (e.g., _101) 
+      str_remove("_\\d+$") %>% # Remove contig suffix (e.g., _101)
+      str_remove("(?i)chromosome\\s*\\d+") %>% # Remove "chromosome 1" or "chromosome 2"
       str_trim() } else {   
-        header } # For Chromobacterium and others, keep the WHOLE header as the ID.
+        header } # keep other genomes as is 
   }) 
 
 # Merge sequences 
@@ -80,7 +77,11 @@ names(seqs) <- names(split_seqs) %>%
 
 # Verification 
 print(names(seqs))
+```
 
+
+Count motifs 
+```{r}
 # Function that counts DUS for both forward and reverse. fixed = FALSE allows R to interpret IUPAC codes like 'M' which stand for ether bp A or C
 count_motif <- function(seqset, motif) {
   forward <- vcountPattern(motif, seqset, fixed = FALSE)
@@ -103,54 +104,14 @@ counts_df <- data.frame(Genome = names(seqs),
 counts_df <- counts_df %>% 
   filter(!grepl("plasmid", Genome, ignore.case = TRUE)) #removing plasmids
 
-```
-
-
-Do the same for E. coli K12 and B. pseudomalei
-```{r Chunk 2}
-ecoli_seq <- readDNAStringSet("C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Data/ncbi_ecoli_K12/GCF_000005845.2_ASM584v2_genomic.fna")  
-
-names(ecoli_seq) <- names(ecoli_seq) %>%
-  str_remove("^[^ ]+\\s+") %>%                     # Remove accession number
-  str_remove(",.*$") %>%                           # Remove after comma
-  str_remove("\\s+chromosome.*$") %>%               # Remove "chromosome..."
-  str_remove("\\s+complete genome.*$") %>%          # Remove "complete genome..."
-  str_trim()
-
-ecoli_counts <- data.frame(Genome = names(ecoli_seq),
-  DUS4 = count_motif(ecoli_seq, dus4),
-  DUS5 = count_motif(ecoli_seq, dus5),
-  DUS6 = count_motif(ecoli_seq, dus6),
-  DUS7 = count_motif(ecoli_seq, dus7),
-  DUS8  = count_motif(ecoli_seq, dus8),
-  DUS9  = count_motif(ecoli_seq, dus9),
-  DUS10 = count_motif(ecoli_seq, dus10)
-)
-
-burk_seq <- readDNAStringSet("C:/Users/oliwi/OneDrive - OsloMet/00. Master Thesies/Bioinformatics/Data/ncbi_burkholderia/GCF_030297255.1_ASM3029725v1_genomic.fna")
-
-names(burk_seq) <- names(burk_seq) %>%
-  str_remove("^[^ ]+\\s+") %>%
-  str_remove(",.*$") %>%   
-  str_remove("\\s+chromosome.*$") %>%       
-  str_remove("\\s+complete genome.*$") %>%      
-  str_trim()
-
-burk_counts <- data.frame(Genome = names(burk_seq),
-  DUS4 = count_motif(burk_seq, dus4),
-  DUS5 = count_motif(burk_seq, dus5),
-  DUS6 = count_motif(burk_seq, dus6),
-  DUS7 = count_motif(burk_seq, dus7),
-  DUS8  = count_motif(burk_seq, dus8),
-  DUS9  = count_motif(burk_seq, dus9),
-  DUS10 = count_motif(burk_seq, dus10)
-)
+#export to excel to get a list of all the strains and not log10 adjusted counts
+#write.xlsx(counts_df, file = "Strain_list.xlsx", rowNames = FALSE)
 
 ```
 
 
-Progressing from DUS count in genome to DUS/Mb to have data that can be compared across species and memebers. 
-```{r Chunk 3, message=FALSE, warning=FALSE}
+Establish DUS/Mb and not just raw counts 
+```{r}
 genome_lengths <- data.frame(
   Genome = names(seqs),
   Length_Mb = width(seqs) / 1e6
@@ -168,9 +129,6 @@ counts_df$DUS6_perMb <- counts_df$DUS6 / counts_df$Length_Mb
 counts_df$DUS5_perMb <- counts_df$DUS5 / counts_df$Length_Mb
 counts_df$DUS4_perMb <- counts_df$DUS4 / counts_df$Length_Mb
 
-#export to excel because I need a list of all the strains
-#write.xlsx(counts_df, file = "Strain_list.xlsx", row.names = FALSE)
-
 # reshape normalised data
 chromo_long <- counts_df %>%
   pivot_longer(
@@ -179,84 +137,22 @@ chromo_long <- counts_df %>%
     values_to = "Count_perMb"
   ) %>%
   mutate(Motif = gsub("_perMb", "", Motif)) %>%
-  distinct(Genome, Motif, .keep_all = TRUE)
-
-
-#E. coli K 12 and Burk - code is different because just one genome is analysed, and not multiple
-ecoli_genome_length <- sum(width(ecoli_seq)) / 1e6
-
-ecoli_counts <- ecoli_counts %>%
-  mutate(
-    Length_Mb = ecoli_genome_length,
-    DUS4_perMb  = DUS4  / ecoli_genome_length,
-    DUS5_perMb  = DUS5  / ecoli_genome_length,
-    DUS6_perMb  = DUS6  / ecoli_genome_length,
-    DUS7_perMb  = DUS7  / ecoli_genome_length,
-    DUS8_perMb  = DUS8  / ecoli_genome_length,
-    DUS9_perMb  = DUS9  / ecoli_genome_length,
-    DUS10_perMb = DUS10 / ecoli_genome_length
-  )
-
-ecoli_long <- ecoli_counts %>%
-  pivot_longer(
-    cols = ends_with("_perMb"),
-    names_to = "Motif",
-    values_to = "Count_perMb"
-  ) %>%
-  mutate(Motif = gsub("_perMb", "", Motif)) %>%
-  distinct(Genome, Motif, .keep_all = TRUE)
-
-burk_genome_length <- sum(width(burk_seq)) / 1e6
-
-burk_counts <- burk_counts %>%
-  mutate(
-    Length_Mb = burk_genome_length,
-    DUS4_perMb  = DUS4  / burk_genome_length,
-    DUS5_perMb  = DUS5  / burk_genome_length,
-    DUS6_perMb  = DUS6  / burk_genome_length,
-    DUS7_perMb  = DUS7  / burk_genome_length,
-    DUS8_perMb  = DUS8  / burk_genome_length,
-    DUS9_perMb  = DUS9  / burk_genome_length,
-    DUS10_perMb = DUS10 / burk_genome_length
-  )
-
-burk_long <- burk_counts %>%
-  pivot_longer(
-    cols = ends_with("_perMb"),
-    names_to = "Motif",
-    values_to = "Count_perMb"
-  ) %>%
-  mutate(Motif = gsub("_perMb", "", Motif)) %>%
-  distinct(Genome, Motif, .keep_all = TRUE)
-
+  distinct(Genome, Motif, .keep_all = TRUE) %>%
+  mutate(Genome = fct_reorder(Genome, Count_perMb, .desc = FALSE))
 ```
 
 
-Heat map of DUS/Mb with logarithmic scaling to normalise the values and accurately represent distribution. 
-```{r Chunk 4, message=FALSE, warning=FALSE}
-# Combine  data
-chromo_long$Group <- "Chromobacteriaceae"
-ecoli_long$Group <- "Escherichia coli K12"
-burk_long$Group <- "Burkholderia pseudomallei"
-
-combined_long <- bind_rows(chromo_long, ecoli_long, burk_long)
-
-combined_long <- combined_long %>%
-  mutate(Genome = fct_reorder(Genome, Count_perMb, .desc = FALSE),
-         Group  = factor(Group, levels =c(
-           "Chromobacteriaceae",
-           "Escherichia coli K12",
-           "Burkholderia pseudomallei")))
-
+visualise as a heatmap
+```{r}
 # Set order of x-axis
-combined_long$Motif <- factor(
-  combined_long$Motif,
+chromo_long$Motif <- factor(
+  chromo_long$Motif,
   levels = c("DUS10", "DUS9", "DUS8", "DUS7", "DUS6", "DUS5", "DUS4")
 )
 
 
 # Heat-map visualising DUS/Mb for merged dataset  
-ggplot(combined_long,
+ggplot(chromo_long,
        aes(x = Motif, y = Genome, fill = Count_perMb)) +
   geom_tile(color = "white") +
   geom_text(aes(label = round(Count_perMb, 1)), color = "black", size = 3) +
@@ -277,6 +173,7 @@ ggplot(combined_long,
   theme(
     axis.text.x = element_text(angle = 45, hjust = 1)
   )
+
 
 ```
 
