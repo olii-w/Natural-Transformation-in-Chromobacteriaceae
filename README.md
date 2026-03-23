@@ -50,7 +50,8 @@ Some analyses depend on external tools (e.g., motif discovery pipelines).
 Parameter choices reflect the scope and level of a master’s thesis and may be simplified compared to full-scale bioinformatic pipelines. 
 
 #### Author
-Oliwia Hillestad Waz
+Oliwia Hillestad Waz  
+
 Master’s Thesis in Biomedicine at OsloMet 
 
 #### Acknowledgements
