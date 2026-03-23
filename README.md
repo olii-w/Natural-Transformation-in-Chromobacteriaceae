@@ -36,14 +36,7 @@ Each file in `script` corresponds to a specific methodological section in the th
 Additionally in the `results` folder one can find results from r-finder, OperonMapper, AlphaFold and the images produced from the scripts. 
 
 ### Requirements
-The analyses were primarily conducted in R. Required packages may include (but are not limited to):
-- tidyverse
-- ggplot2
-- Biostrings
-- seqinr
-- pheatmap
-- ggseqlogo
-
+The analyses were primarily conducted in R. Required packages are listed in the `grateful-report.html`
 Note: Some scripts may require additional dependencies depending on your environment.
 
 ### Data
