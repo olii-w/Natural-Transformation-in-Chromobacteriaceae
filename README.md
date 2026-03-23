@@ -31,7 +31,7 @@ Each file in `script` corresponds to a specific methodological section in the th
 - `Overexpression_Heatmap.rmd` --> Computes enrichment ratios (observed vs expected) and generates comparative heatmaps
 
 #### 3.1.6 – Construction of gene neighbourhood maps
-- `United_GeneMap.rmd` Generates operon/gene neighbourhood visualisations for comP and associated genes
+- `United_GeneMap.rmd` --> Generates operon/gene neighbourhood visualisations for comP and associated genes
 
 Additionally in the `results` folder one can find results from r-finder, OperonMapper, AlphaFold and the images produced from the scripts. 
 
