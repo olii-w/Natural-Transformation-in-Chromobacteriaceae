@@ -1,33 +1,72 @@
-# Characterisation of Natural Transformation in Chromobacteriaceae - Master thesies code 
+# Characterisation of Natural Transformation in Chromobacteriaceae
+## Master’s Thesis Code Repository
+This repository contains the code developed and used in my master’s thesis investigating natural transformation in the Chromobacteriaceae family. The project integrates bioinformatic analyses to identify DNA uptake sequence (DUS)-like motifs, assess their genomic distribution, and explore the genetic context of competence-related genes.
+The purpose of this repository is to ensure transparency, reproducibility, and accessibility of all computational analyses performed during the study.
 
-This repository has been made to make the code written for my master thesies publically available. Each document represents a portion of the code used under different methodolody sections.
+### Project Overview
 
-Section and its respective code files:
+Natural transformation is a key mechanism of horizontal gene transfer (HGT), well characterised in Neisseriaceae but largely unexplored in environmental relatives such as Chromobacteriaceae.
 
-3.1.2 – Search for overrepresented sequences in Chromobacteriaceae  
-- r-finder
-- Sequence_logos.rmd 
+This repository supports analyses aimed at:
+- Identifying overrepresented sequence motifs (putative ChromoDUS)
+- Quantifying motif density across genomes
+- Assessing enrichment relative to background nucleotide composition
+- Visualising motif distribution patterns
+- Mapping gene neighbourhoods of competence-associated gene comP
+- Modelling ComP of genus-representatives from Chromobacteriacea using AlphaFold
 
-3.1.3 – Identification and quantification of DUS density  
-- Heatmap_DUS.rmd
+### Repository Structure
 
-3.1.4 – Comparative heat map construction and data visualisation  
-- Heatmap_DUS.rmd
-- Overexpression_Heatmap.rmd
+Each file in `script` corresponds to a specific methodological section in the thesis.  
 
-3.1.6 – Construction of gene neighbourhood maps   
-- United_GeneMap.rmd
+#### 3.1.2 – Search for overrepresented sequences
+- `r-finder` --> Tool used to identify candidate overrepresented motifs across genomes
+- `Sequence_logos.rmd` --> Generates sequence logos to visualise motif conservation
 
-# Identification and Validation of ChromoDUS in Chromobacteriaceae
+#### 3.1.3 – Identification and quantification of DUS density
+- `Heatmap_DUS.rmd` --> Calculates DUS frequency (DUS/Mb) across genomes and visualises distributions
 
-This repository contains the bioinformatic data and laboratory results for my Master's Thesis. 
+#### 3.1.4 – Comparative heatmap construction and data visualisation
+- `Heatmap_DUS.rmd` (Shared with Section 3.1.3)
+- `Overexpression_Heatmap.rmd` --> Computes enrichment ratios (observed vs expected) and generates comparative heatmaps
 
-## Project Overview
-Investigating sequence-specific DNA uptake in Chromobacteriacea through k-mer enrichment analysis of DNA uptake sequences, identification of genes partaking in transformation, and AlphaFold predictions of ComP structure 
+#### 3.1.6 – Construction of gene neighbourhood maps
+- `United_GeneMap.rmd` Generates operon/gene neighbourhood visualisations for comP and associated genes
 
-## Directory Structure
-- `/data`: Raw and processed CSVs of genomic analysis
-- `/scripts`: Mosly R code used for analysis, one file is from GitBash for r_finder analysis
-- `/results`: Operon maps, alignment files, and AlphaFold 3 models.
+Additionally in the `results` folder one can find results from r-finder, OperonMapper, AlphaFold and the images produced from the scripts. 
+
+### Requirements
+The analyses were primarily conducted in R. Required packages may include (but are not limited to):
+- tidyverse
+- ggplot2
+- Biostrings
+- seqinr
+- pheatmap
+- ggseqlogo
+
+Note: Some scripts may require additional dependencies depending on your environment.
+
+### Data
+Genomic data used in this project were obtained from publicly available databases (e.g., NCBI RefSeq).
+Due to file size and licensing considerations, raw genome files are not included in this repository.
+
+### Reproducibility Notes
+
+File paths in scripts may need to be adapted to your local environment.
+Some analyses depend on external tools (e.g., motif discovery pipelines).
+Parameter choices reflect the scope and level of a master’s thesis and may be simplified compared to full-scale bioinformatic pipelines. 
+
+#### Author
+Oliwia Hillestad Waz
+Master’s Thesis in Biomedicine at OsloMet 
+
+#### Acknowledgements
+
+This work was conducted as part of a master’s thesis project. I acknowledge main supervisors Ole Herman Ambur and collaborators Kristian Alfsnes, Stephan A. Frye, Alexander Hesselberg Løvestad, and, Stian Aleksander Helsem for guidance in both experimental design and computational analysis.
+
+#### License
+This repository is shared for academic and educational purposes.
+Please cite appropriately if you reuse code or concepts from this work.
+
 
 
